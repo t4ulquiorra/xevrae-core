@@ -5,7 +5,7 @@ import org.simpmusic.nowplayingcenter.domain.Platform
 
 class NPYC(private val platform: Platform) {
     fun setListener(listener: NowPlayingListener) {}
-    fun updateMetadata(title: String, artist: String, album: String, artworkUrl: String?) {}
-    fun updatePlaybackState(isPlaying: Boolean, position: Long, duration: Long) {}
-    fun release() {}
+    fun setNowPlaying(title: String, artist: String, album: String, thumbnails: Any?) {}
+    fun setButtonEnabled(isPlaying: Boolean, canGoNext: Boolean, canGoPrevious: Boolean) {}
+    fun removeListener() {}
 }
