@@ -10,5 +10,5 @@ interface NowPlayingListener {
 sealed class Platform {
     object Windows : Platform()
     object MacOs : Platform()
-    data class Linux(val display: String? = null) : Platform()
+    data class Linux(val display: String? = null, val appId: String? = null) : Platform()
 }
