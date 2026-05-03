@@ -113,7 +113,6 @@ kotlin {
         jvmMain {
             dependencies {
                 implementation(projects.mediaJvm)
-                implementation(libs.nowplaying)
                 implementation(libs.jna)
                 implementation(libs.jna.platform)
             }
