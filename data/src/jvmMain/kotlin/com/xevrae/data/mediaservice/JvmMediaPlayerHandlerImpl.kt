@@ -88,9 +88,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.koin.mp.KoinPlatform.getKoin
-import org.xevrae.nowplayingcenter.NPYC
-import org.xevrae.nowplayingcenter.domain.NowPlayingListener
-import org.xevrae.nowplayingcenter.domain.Platform
+import org.simpmusic.nowplayingcenter.NPYC
+import org.simpmusic.nowplayingcenter.domain.NowPlayingListener
+import org.simpmusic.nowplayingcenter.domain.Platform
 import kotlin.math.pow
 
 private val TAG = "JvmMediaPlayerHandler"
