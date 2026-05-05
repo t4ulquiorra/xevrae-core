@@ -12,7 +12,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
 }
 
 protobuf {
@@ -30,6 +34,6 @@ protobuf {
 
 dependencies {
     implementation(libs.protobuf.javalite)
-    implementation(libs.okhttp)
-    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.okhttp3.okhttp)
+    implementation(libs.coroutines.android)
 }
