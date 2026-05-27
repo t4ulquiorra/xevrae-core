@@ -764,7 +764,8 @@ internal class MediaServiceHandlerImpl(
 
             PlayerEvent.SkipToPrevious -> {
                 resetCrossfade()
-                player.seekToPreviousMediaItem()
+                val prev = (currentOrderIndex() - 1).coerceAtLeast(0)
+                playMediaItemInMediaSource(prev)
             }
 
             PlayerEvent.Stop -> {
