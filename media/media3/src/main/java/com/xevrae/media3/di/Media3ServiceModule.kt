@@ -83,6 +83,7 @@ import org.koin.core.context.loadKoinModules
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import java.net.Proxy
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -213,6 +214,16 @@ private val mediaServiceModule =
         }
     }
 
+// In-memory stream URL cache: videoId -> Pair(url, expiryEpochMs)
+// Mirrors XiaoRi's songUrlCache for sub-millisecond URL lookups,
+// avoiding a Room DB round-trip on every ExoPlayer data source open.
+private val streamUrlCache = ConcurrentHashMap<String, Pair<String, Long>>()
+
+fun clearStreamUrlCache(videoId: String? = null) {
+    if (videoId == null) streamUrlCache.clear()
+    else streamUrlCache.remove(videoId)
+}
+
 @UnstableApi
 private fun provideResolvingDataSourceFactory(
     cacheDataSourceFactory: CacheDataSource.Factory,
@@ -227,6 +238,18 @@ private fun provideResolvingDataSourceFactory(
         val mediaId = dataSpec.key ?: error("No media id")
         Logger.w("Stream", mediaId)
         Logger.w("Stream", mediaId.startsWith(MERGING_DATA_TYPE.VIDEO).toString())
+
+        // Fast path: in-memory URL cache (avoids DB round-trip)
+        streamUrlCache[mediaId]?.takeIf { it.second > System.currentTimeMillis() }?.let { (cachedUrl, _) ->
+            Logger.w("Stream", "In-memory cache hit for $mediaId")
+            coroutineScope.launch(Dispatchers.IO) {
+                streamRepository.updateFormat(
+                    if (mediaId.contains(MERGING_DATA_TYPE.VIDEO)) mediaId.removePrefix(MERGING_DATA_TYPE.VIDEO) else mediaId
+                )
+            }
+            return@Factory dataSpec.withUri(cachedUrl.toUri()).subrange(dataSpec.uriPositionOffset, 10 * 512 * 1024L)
+        }
+
         val length = if (dataSpec.length >= 0) dataSpec.length else 1
         if (downloadCache.isCached(
                 mediaId,
@@ -276,6 +299,7 @@ private fun provideResolvingDataSourceFactory(
                         Logger.d("Stream", "is 403 $is403Url")
                         if (!is403Url) {
                             dataSpecReturn = dataSpec.withUri(videoUrl.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
+                            streamUrlCache[mediaId] = Pair(videoUrl, System.currentTimeMillis() + 55 * 60 * 1000L)
                             resolved = true
                             return@runBlocking
                         }
@@ -292,6 +316,7 @@ private fun provideResolvingDataSourceFactory(
                         Logger.d("Stream", it)
                         Logger.w("Stream", "Video")
                         dataSpecReturn = dataSpec.withUri(it.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
+                        streamUrlCache[mediaId] = Pair(it, System.currentTimeMillis() + 55 * 60 * 1000L)
                         resolved = true
                     }
             } else {
@@ -304,6 +329,7 @@ private fun provideResolvingDataSourceFactory(
                         Logger.d("Stream", "is 403 $is403Url")
                         if (!is403Url) {
                             dataSpecReturn = dataSpec.withUri(audioUrl.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
+                            streamUrlCache[mediaId] = Pair(audioUrl, System.currentTimeMillis() + 55 * 60 * 1000L)
                             resolved = true
                             return@runBlocking
                         }
@@ -320,6 +346,7 @@ private fun provideResolvingDataSourceFactory(
                         Logger.d("Stream", it)
                         Logger.w("Stream", "Audio")
                         dataSpecReturn = dataSpec.withUri(it.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
+                        streamUrlCache[mediaId] = Pair(it, System.currentTimeMillis() + 55 * 60 * 1000L)
                         resolved = true
                     }
             }

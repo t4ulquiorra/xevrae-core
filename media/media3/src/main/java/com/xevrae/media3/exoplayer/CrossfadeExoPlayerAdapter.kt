@@ -99,6 +99,15 @@ internal class CrossfadeExoPlayerAdapter(
                 Logger.d(TAG, "Crossfade duration: $crossfadeDurationMs ms")
             }
         }
+        // Clear in-memory URL cache when audio quality changes so next play fetches fresh stream
+        coroutineScope.launch {
+            var isFirst = true
+            dataStoreManager.quality.collect { _ ->
+                if (isFirst) { isFirst = false; return@collect }
+                Logger.d(TAG, "Quality changed — clearing stream URL cache")
+                clearStreamUrlCache()
+            }
+        }
         coroutineScope.launch {
             dataStoreManager.crossfadeDjMode.collect { enabled ->
                 djCrossfadeEnabled = (enabled == DataStoreManager.TRUE)
@@ -1338,6 +1347,8 @@ internal class CrossfadeExoPlayerAdapter(
                                     // Invalidate cached format so ResolvingDataSource fetches a fresh URL
                                     streamRepository.invalidateFormat(currentVideoId)
                                     streamRepository.invalidateFormat("${com.xevrae.common.MERGING_DATA_TYPE.VIDEO}$currentVideoId")
+                                    clearStreamUrlCache(currentVideoId)
+                                    clearStreamUrlCache("${com.xevrae.common.MERGING_DATA_TYPE.VIDEO}$currentVideoId")
                                     // Evict from precache (it may hold a stale player)
                                     precachedPlayers.remove(currentVideoId)?.player?.release()
                                     // Reload the track
