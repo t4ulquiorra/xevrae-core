@@ -1,5 +1,7 @@
 package com.xevrae.media3.exoplayer
 
+import com.xevrae.media3.cache.StreamUrlCache
+
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.media3.common.AudioAttributes
@@ -105,7 +107,7 @@ internal class CrossfadeExoPlayerAdapter(
             dataStoreManager.quality.collect { _ ->
                 if (isFirst) { isFirst = false; return@collect }
                 Logger.d(TAG, "Quality changed — clearing stream URL cache")
-                clearStreamUrlCache()
+                StreamUrlCache.clear()
             }
         }
         coroutineScope.launch {
@@ -1347,8 +1349,8 @@ internal class CrossfadeExoPlayerAdapter(
                                     // Invalidate cached format so ResolvingDataSource fetches a fresh URL
                                     streamRepository.invalidateFormat(currentVideoId)
                                     streamRepository.invalidateFormat("${com.xevrae.common.MERGING_DATA_TYPE.VIDEO}$currentVideoId")
-                                    clearStreamUrlCache(currentVideoId)
-                                    clearStreamUrlCache("${com.xevrae.common.MERGING_DATA_TYPE.VIDEO}$currentVideoId")
+                                    StreamUrlCache.remove(currentVideoId)
+                                    StreamUrlCache.remove("${com.xevrae.common.MERGING_DATA_TYPE.VIDEO}$currentVideoId")
                                     // Evict from precache (it may hold a stale player)
                                     precachedPlayers.remove(currentVideoId)?.player?.release()
                                     // Reload the track
