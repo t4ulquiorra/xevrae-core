@@ -18,6 +18,7 @@ import com.xevrae.domain.utils.Resource
 import com.xevrae.kotlinytmusicscraper.YouTube
 import com.xevrae.domain.quality.AudioStreamQuality
 import com.xevrae.domain.quality.HighQualityStreamRepository
+import com.xevrae.domain.repository.SongRepository
 import com.xevrae.kotlinytmusicscraper.models.MediaType
 import com.xevrae.kotlinytmusicscraper.models.response.PlayerResponse
 import com.xevrae.kotlinytmusicscraper.utils.decodeBase64
@@ -35,6 +36,7 @@ internal class StreamRepositoryImpl(
     private val localDataSource: LocalDataSource,
     private val youTube: YouTube,
     private val highQualityStreamRepository: HighQualityStreamRepository? = null,
+    private val songRepository: SongRepository? = null,
 ) : StreamRepository {
     override suspend fun insertNewFormat(newFormat: NewFormatEntity) =
         withContext(Dispatchers.IO) {
@@ -120,12 +122,11 @@ internal class StreamRepositoryImpl(
                 else dataStoreManager.quality.first()
             )
             if (!isVideo && !muxed && qualityMode != AudioStreamQuality.YOUTUBE) {
-                val ytMetadata = youTube.player(videoId).getOrNull()
-                val title = ytMetadata?.second?.videoDetails?.title.orEmpty()
-                val artist = ytMetadata?.second?.videoDetails?.author
-                    ?.replace(" - Topic", "").orEmpty()
-                val durationMs = ytMetadata?.second?.videoDetails?.lengthSeconds
-                    ?.toLongOrNull()?.let { it * 1000L }
+                // Get title/artist from local DB first (instant), fall back to YouTube metadata
+                val dbSong = songRepository?.getSongById(videoId)?.firstOrNull()
+                val title = dbSong?.title.orEmpty()
+                val artist = dbSong?.artistName?.joinToString(", ").orEmpty().replace(" - Topic", "")
+                val durationMs = dbSong?.durationSeconds?.let { if (it > 0) it * 1000L else null }
                 val highQualityUrl = highQualityStreamRepository?.resolveHighQualityUrl(
                     quality = qualityMode,
                     title = title,
