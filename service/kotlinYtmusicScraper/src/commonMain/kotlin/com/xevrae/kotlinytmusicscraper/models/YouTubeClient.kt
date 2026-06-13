@@ -125,6 +125,40 @@ data class YouTubeClient(
                 xClientName = 5,
             )
 
+        // ANDROID_VR clients — no PoToken required, fast stream resolution
+        // ANDROID_VR_1_43_32 uses non-adaptive bitrate which fixes audio stuttering
+        val ANDROID_VR_1_43_32 =
+            YouTubeClient(
+                clientName = "ANDROID_VR",
+                clientVersion = "1.43.32",
+                api_key = "AIzaSyDCU8hByM-4DrUqRUYnGn-3llEO78bcxq8",
+                userAgent = "com.google.android.apps.youtube.vr.oculus/1.43.32 (Linux; U; Android 12; en_US; Quest 3; Build/SQ3A.220605.009.A1; Cronet/107.0.5284.2)",
+                osName = "Android",
+                osVersion = "12",
+                deviceMake = "Oculus",
+                deviceModel = "Quest 3",
+            )
+
+        val ANDROID_VR_1_61_48 =
+            YouTubeClient(
+                clientName = "ANDROID_VR",
+                clientVersion = "1.61.48",
+                api_key = "AIzaSyDCU8hByM-4DrUqRUYnGn-3llEO78bcxq8",
+                userAgent = "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; en_US; Quest 3; Build/SQ3A.220605.009.A1; Cronet/132.0.6808.3)",
+                osName = "Android",
+                osVersion = "12",
+                deviceMake = "Oculus",
+                deviceModel = "Quest 3",
+            )
+
+        val ANDROID_VR_NO_AUTH =
+            YouTubeClient(
+                clientName = "ANDROID_VR",
+                clientVersion = "1.61.48",
+                api_key = "AIzaSyDCU8hByM-4DrUqRUYnGn-3llEO78bcxq8",
+                userAgent = "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; en_US; Oculus Quest 3; Build/SQ3A.220605.009.A1; Cronet/132.0.6808.3)",
+            )
+
         val MWEB =
             YouTubeClient(
                 clientName = "MWEB",
