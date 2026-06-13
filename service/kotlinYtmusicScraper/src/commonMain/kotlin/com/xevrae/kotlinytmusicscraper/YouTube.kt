@@ -1356,9 +1356,67 @@ class YouTube {
                 decodedSigResponse = response
                 Logger.d(TAG, "YouTube Player found URL")
             } else {
-                Logger.d(TAG, "YouTube Player no URL found")
+                Logger.d(TAG, "YouTube Player no URL found — trying fallback clients")
             }
-            if (decodedSigResponse == null) throw RuntimeException("No URL found")
+
+            // Multi-client fallback: mirrors XiaoRi's STREAM_FALLBACK_CLIENTS chain
+            // Handles privately owned tracks, age-restricted content, and bot-detected sessions
+            if (decodedSigResponse == null) {
+                val isPrivatelyOwned = tempRes.videoDetails?.musicVideoType == "MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK"
+                val fallbackClients = listOf(
+                    YouTubeClient.ANDROID_MUSIC,
+                    YouTubeClient.IOS,
+                    YouTubeClient.TVHTML5_SIMPLY,
+                    YouTubeClient.TVHTML5,
+                    YouTubeClient.ANDROID,
+                    YouTubeClient.WEB_EMBEDDED,
+                    YouTubeClient.MWEB,
+                    YouTubeClient.WEB,
+                )
+                for (client in fallbackClients) {
+                    try {
+                        Logger.d(TAG, "Trying fallback client: ${client.clientName}")
+                        val fallbackRes = ytMusic.player(
+                            client,
+                            videoId,
+                            playlistId,
+                            cpn,
+                            signatureTimestamp = run {
+                                val today = Clock.System.todayIn(TimeZone.UTC)
+                                val epoch = Instant.fromEpochSeconds(0).toLocalDateTime(TimeZone.UTC).date
+                                epoch.daysUntil(today)
+                            },
+                        ).body<PlayerResponse>()
+
+                        if (fallbackRes.playabilityStatus.status != "OK") {
+                            Logger.d(TAG, "Fallback client ${client.clientName} not OK: ${fallbackRes.playabilityStatus.status}")
+                            continue
+                        }
+
+                        // For privately owned tracks skip URL validation
+                        val hasDirectUrls = fallbackRes.streamingData?.adaptiveFormats
+                            ?.any { !it.url.isNullOrEmpty() } == true
+
+                        if (hasDirectUrls || isPrivatelyOwned) {
+                            decodedSigResponse = if (isPrivatelyOwned) {
+                                // Skip NewPipe for privately owned — use direct URLs as-is
+                                fallbackRes
+                            } else {
+                                newPipePlayer(videoId, fallbackRes) ?: fallbackRes
+                            }
+                            if (decodedSigResponse != null) {
+                                Logger.d(TAG, "Fallback client ${client.clientName} succeeded")
+                                break
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "Fallback client ${client.clientName} error: ${e.message}")
+                        continue
+                    }
+                }
+            }
+
+            if (decodedSigResponse == null) throw RuntimeException("No URL found after all fallback clients")
             val firstThumb =
                 decodedSigResponse.videoDetails
                     ?.thumbnail
