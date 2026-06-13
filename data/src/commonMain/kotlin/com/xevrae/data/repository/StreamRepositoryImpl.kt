@@ -123,7 +123,7 @@ internal class StreamRepositoryImpl(
             )
             if (!isVideo && !muxed && qualityMode != AudioStreamQuality.YOUTUBE) {
                 // Get title/artist from local DB first (instant), fall back to YouTube metadata
-                val dbSong = songRepository?.getSongById(videoId)?.firstOrNull()
+                val dbSong = songRepository?.getSongById(videoId)?.first()
                 val title = dbSong?.title.orEmpty()
                 val artist = dbSong?.artistName?.joinToString(", ").orEmpty().replace(" - Topic", "")
                 val durationMs = dbSong?.durationSeconds?.let { if (it > 0) it * 1000L else null }
@@ -136,7 +136,7 @@ internal class StreamRepositoryImpl(
                 if (highQualityUrl != null) {
                     Logger.w("Stream", "High quality stream resolved: $qualityMode")
                     insertNewFormat(
-                        com.xevrae.domain.data.entities.NewFormatEntity(
+                        NewFormatEntity(
                             videoId = videoId,
                             itag = 0,
                             mimeType = when (qualityMode) {
@@ -150,12 +150,12 @@ internal class StreamRepositoryImpl(
                             bitrate = if (qualityMode == AudioStreamQuality.SAAVN) 320000 else null,
                             sampleRate = null,
                             contentLength = null,
-                            loudnessDb = ytMetadata?.second?.playerConfig?.audioConfig?.loudnessDb?.toFloat(),
-                            lengthSeconds = ytMetadata?.second?.videoDetails?.lengthSeconds?.toInt(),
+                            loudnessDb = null,
+                            lengthSeconds = dbSong?.durationSeconds,
                             playbackTrackingVideostatsPlaybackUrl = null,
                             playbackTrackingAtrUrl = null,
                             playbackTrackingVideostatsWatchtimeUrl = null,
-                            cpn = ytMetadata?.first,
+                            cpn = null,
                             expiredTime = now().plusSeconds(3600L),
                             audioUrl = highQualityUrl,
                             videoUrl = null,
