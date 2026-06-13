@@ -15,6 +15,7 @@ import com.xevrae.data.repository.PodcastRepositoryImpl
 import com.xevrae.data.repository.SearchRepositoryImpl
 import com.xevrae.data.repository.SongRepositoryImpl
 import com.xevrae.data.repository.StreamRepositoryImpl
+import com.xevrae.domain.quality.HighQualityStreamRepository
 import com.xevrae.data.repository.UpdateRepositoryImpl
 import com.xevrae.domain.repository.AccountRepository
 import com.xevrae.domain.repository.AlbumRepository
@@ -82,7 +83,7 @@ val repositoryModule =
         }
 
         single<StreamRepository>(createdAtStart = true) {
-            StreamRepositoryImpl(get(), get())
+            StreamRepositoryImpl(get(), get(), getOrNull<HighQualityStreamRepository>())
         }
 
         single<UpdateRepository>(createdAtStart = true) {

@@ -234,8 +234,14 @@ object SUPPORTED_LANGUAGE {
 }
 
 object QUALITY {
-    val items: Array<CharSequence> = arrayOf("Low - 66kps", "Medium - 129kps") // , "High - 256kps (YT Premium) (Slow loading)"
-    val itags: Array<Int> = arrayOf(250, 251) // ,774
+    val items: Array<CharSequence> = arrayOf(
+        "Low - 66kps",
+        "Medium - 129kps",
+        "Saavn (320kbps)",
+        "Qobuz (Lossless)"
+    )
+    val itags: Array<Int> = arrayOf(250, 251, 0, 0)
+    // index 0,1 = YouTube itags; index 2 = Saavn 320kbps; index 3 = Qobuz Lossless
 }
 
 object VIDEO_QUALITY {

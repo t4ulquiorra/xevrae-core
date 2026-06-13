@@ -16,6 +16,8 @@ import com.xevrae.domain.manager.DataStoreManager
 import com.xevrae.domain.repository.StreamRepository
 import com.xevrae.domain.utils.Resource
 import com.xevrae.kotlinytmusicscraper.YouTube
+import com.xevrae.domain.quality.AudioStreamQuality
+import com.xevrae.domain.quality.HighQualityStreamRepository
 import com.xevrae.kotlinytmusicscraper.models.MediaType
 import com.xevrae.kotlinytmusicscraper.models.response.PlayerResponse
 import com.xevrae.kotlinytmusicscraper.utils.decodeBase64
@@ -32,6 +34,7 @@ import kotlinx.coroutines.withContext
 internal class StreamRepositoryImpl(
     private val localDataSource: LocalDataSource,
     private val youTube: YouTube,
+    private val highQualityStreamRepository: HighQualityStreamRepository? = null,
 ) : StreamRepository {
     override suspend fun insertNewFormat(newFormat: NewFormatEntity) =
         withContext(Dispatchers.IO) {
@@ -111,6 +114,58 @@ internal class StreamRepositoryImpl(
                     18
                 }
             // 134, 136, 137
+            // High-quality path: Saavn (320kbps) or Qobuz (Lossless)
+            val qualityMode = AudioStreamQuality.from(
+                if (isDownloading) dataStoreManager.downloadQuality.first()
+                else dataStoreManager.quality.first()
+            )
+            if (!isVideo && !muxed && qualityMode != AudioStreamQuality.YOUTUBE) {
+                val ytMetadata = youTube.player(videoId).getOrNull()
+                val title = ytMetadata?.second?.videoDetails?.title.orEmpty()
+                val artist = ytMetadata?.second?.videoDetails?.author
+                    ?.replace(" - Topic", "").orEmpty()
+                val durationMs = ytMetadata?.second?.videoDetails?.lengthSeconds
+                    ?.toLongOrNull()?.let { it * 1000L }
+                val highQualityUrl = highQualityStreamRepository?.resolveHighQualityUrl(
+                    quality = qualityMode,
+                    title = title,
+                    artist = artist,
+                    durationMs = durationMs,
+                )
+                if (highQualityUrl != null) {
+                    Logger.w("Stream", "High quality stream resolved: $qualityMode")
+                    insertNewFormat(
+                        com.xevrae.domain.data.entities.NewFormatEntity(
+                            videoId = videoId,
+                            itag = 0,
+                            mimeType = when (qualityMode) {
+                                AudioStreamQuality.LOSSLESS -> "audio/flac"
+                                else -> "audio/mp4"
+                            },
+                            codecs = when (qualityMode) {
+                                AudioStreamQuality.LOSSLESS -> "flac"
+                                else -> "mp4a.40.2"
+                            },
+                            bitrate = if (qualityMode == AudioStreamQuality.SAAVN) 320000 else null,
+                            sampleRate = null,
+                            contentLength = null,
+                            loudnessDb = ytMetadata?.second?.playerConfig?.audioConfig?.loudnessDb?.toFloat(),
+                            lengthSeconds = ytMetadata?.second?.videoDetails?.lengthSeconds?.toInt(),
+                            playbackTrackingVideostatsPlaybackUrl = null,
+                            playbackTrackingAtrUrl = null,
+                            playbackTrackingVideostatsWatchtimeUrl = null,
+                            cpn = ytMetadata?.first,
+                            expiredTime = now().plusSeconds(3600L),
+                            audioUrl = highQualityUrl,
+                            videoUrl = null,
+                        )
+                    )
+                    emit(highQualityUrl)
+                    return@flow
+                }
+                Logger.w("Stream", "$qualityMode unavailable, falling back to YouTube")
+            }
+
             youTube
                 .player(videoId, noLogIn = muxed)
                 .onSuccess { data ->

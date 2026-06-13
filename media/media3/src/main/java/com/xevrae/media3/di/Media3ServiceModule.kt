@@ -62,6 +62,8 @@ import com.xevrae.domain.repository.StreamRepository
 import com.xevrae.logger.Logger
 import com.xevrae.media3.exoplayer.CrossfadeExoPlayerAdapter
 import com.xevrae.media3.repository.CacheRepositoryImpl
+import com.xevrae.media3.service.quality.QualityStreamResolver
+import com.xevrae.domain.quality.HighQualityStreamRepository
 import com.xevrae.media3.service.SimpleMediaService
 import com.xevrae.media3.service.callback.SimpleMediaSessionCallback
 import com.xevrae.media3.service.download.DownloadUtils
@@ -203,6 +205,10 @@ private val mediaServiceModule =
                 get<HomeRepository>(),
                 get<StreamRepository>(),
             )
+        }
+
+        single<HighQualityStreamRepository>(createdAtStart = true) {
+            QualityStreamResolver()
         }
 
         single<CacheRepository>(createdAtStart = true) {

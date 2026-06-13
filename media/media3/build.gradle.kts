@@ -67,5 +67,6 @@ dependencies {
     implementation(libs.media3.exoplayer.workmanager)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.okhttp3.logging.interceptor)
+    implementation(libs.gson)
     implementation(libs.coroutines.guava)
 }
