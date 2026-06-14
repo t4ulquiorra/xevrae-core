@@ -1283,7 +1283,7 @@ class YouTube {
             val tempRes =
                 ytMusic
                     .player(
-                        YouTubeClient.ANDROID_VR_1_43_32,
+                        WEB_REMIX,
                         videoId,
                         playlistId,
                         cpn,
@@ -1364,14 +1364,12 @@ class YouTube {
             if (decodedSigResponse == null) {
                 val isPrivatelyOwned = tempRes.videoDetails?.musicVideoType == "MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK"
                 val fallbackClients = listOf(
-                    YouTubeClient.ANDROID_VR_1_61_48,
                     YouTubeClient.ANDROID_MUSIC,
                     YouTubeClient.IOS,
                     YouTubeClient.TVHTML5_SIMPLY,
                     YouTubeClient.TVHTML5,
                     YouTubeClient.ANDROID,
                     YouTubeClient.WEB_EMBEDDED,
-                    YouTubeClient.ANDROID_VR_NO_AUTH,
                     YouTubeClient.MWEB,
                     YouTubeClient.WEB,
                 )
