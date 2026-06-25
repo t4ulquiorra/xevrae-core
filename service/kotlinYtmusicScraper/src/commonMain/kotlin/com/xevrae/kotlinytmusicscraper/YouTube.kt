@@ -91,6 +91,10 @@ import io.ktor.http.URLBuilder
 import io.ktor.http.parseQueryString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -1279,90 +1283,94 @@ class YouTube {
                         ]
                     }.joinToString("")
 
-            var decodedSigResponse: PlayerResponse? = null
-            val tempRes =
-                ytMusic
-                    .player(
-                        WEB_REMIX,
-                        videoId,
-                        playlistId,
-                        cpn,
-                        signatureTimestamp =
-                            run {
-                                val today = Clock.System.todayIn(TimeZone.UTC)
-                                val epoch =
-                                    Instant
-                                        .fromEpochSeconds(0)
-                                        .toLocalDateTime(TimeZone.UTC)
-                                        .date
-                                epoch.daysUntil(today)
-                            },
-                    ).body<PlayerResponse>()
-                    .let {
-                        val fexp =
-                            it.streamingData
-                                ?.serverAbrStreamingUrl
-                                ?.toKmpUri()
-                                ?.getQueryParameter("fexp")
-                        val playbackTracking = it.playbackTracking
-                        it.copy(
-                            playbackTracking =
-                                playbackTracking?.copy(
-                                    atrUrl =
-                                        playbackTracking.atrUrl?.copy(
-                                            baseUrl =
-                                                playbackTracking.atrUrl.baseUrl
-                                                    ?.toKmpUri()
-                                                    ?.buildUpon()
-                                                    ?.apply {
-                                                        if (fexp != null) {
-                                                            appendQueryParameter("fexp", fexp)
-                                                        }
-                                                    }?.build()
-                                                    ?.toString(),
-                                        ),
-                                    videostatsPlaybackUrl =
-                                        playbackTracking.videostatsPlaybackUrl?.copy(
-                                            baseUrl =
-                                                playbackTracking.videostatsPlaybackUrl.baseUrl
-                                                    ?.toKmpUri()
-                                                    ?.buildUpon()
-                                                    ?.apply {
-                                                        if (fexp != null) {
-                                                            appendQueryParameter("fexp", fexp)
-                                                        }
-                                                    }?.build()
-                                                    ?.toString(),
-                                        ),
-                                    videostatsWatchtimeUrl =
-                                        playbackTracking.videostatsWatchtimeUrl?.copy(
-                                            baseUrl =
-                                                playbackTracking.videostatsWatchtimeUrl.baseUrl
-                                                    ?.toKmpUri()
-                                                    ?.buildUpon()
-                                                    ?.apply {
-                                                        if (fexp != null) {
-                                                            appendQueryParameter("fexp", fexp)
-                                                        }
-                                                    }?.build()
-                                                    ?.toString(),
-                                        ),
-                                ),
-                        )
-                    }
+            val sigTimestamp = run {
+                val today = Clock.System.todayIn(TimeZone.UTC)
+                val epoch = Instant.fromEpochSeconds(0).toLocalDateTime(TimeZone.UTC).date
+                epoch.daysUntil(today)
+            }
 
-            val response = newPipePlayer(videoId, tempRes)
-            if (response != null) {
-                decodedSigResponse = response
-                Logger.d(TAG, "YouTube Player found URL")
-            } else {
-                Logger.d(TAG, "YouTube Player no URL found — trying fallback clients")
+            var decodedSigResponse: PlayerResponse? = null
+
+            // Race WEB_REMIX (with NewPipe extractor fallback) and ANDROID_VR (direct URLs) in parallel.
+            coroutineScope {
+                val webRemixDeferred = async {
+                    runCatching {
+                        val tempRes = ytMusic.player(
+                            YouTubeClient.WEB_REMIX,
+                            videoId,
+                            playlistId,
+                            cpn,
+                            signatureTimestamp = sigTimestamp,
+                        ).body<PlayerResponse>()
+
+                        val processedRes = tempRes.let {
+                            val fexp = it.streamingData?.serverAbrStreamingUrl?.toKmpUri()?.getQueryParameter("fexp")
+                            val playbackTracking = it.playbackTracking
+                            it.copy(
+                                playbackTracking = playbackTracking?.copy(
+                                    atrUrl = playbackTracking.atrUrl?.copy(
+                                        baseUrl = playbackTracking.atrUrl.baseUrl?.toKmpUri()?.buildUpon()?.apply {
+                                            if (fexp != null) appendQueryParameter("fexp", fexp)
+                                        }?.build()?.toString()
+                                    ),
+                                    videostatsPlaybackUrl = playbackTracking.videostatsPlaybackUrl?.copy(
+                                        baseUrl = playbackTracking.videostatsPlaybackUrl.baseUrl?.toKmpUri()?.buildUpon()?.apply {
+                                            if (fexp != null) appendQueryParameter("fexp", fexp)
+                                        }?.build()?.toString()
+                                    ),
+                                    videostatsWatchtimeUrl = playbackTracking.videostatsWatchtimeUrl?.copy(
+                                        baseUrl = playbackTracking.videostatsWatchtimeUrl.baseUrl?.toKmpUri()?.buildUpon()?.apply {
+                                            if (fexp != null) appendQueryParameter("fexp", fexp)
+                                        }?.build()?.toString()
+                                    )
+                                )
+                            )
+                        }
+
+                        newPipePlayer(videoId, processedRes)
+                    }.getOrNull()
+                }
+
+                val androidVrDeferred = async {
+                    runCatching {
+                        val vrRes = ytMusic.player(
+                            YouTubeClient.ANDROID_VR,
+                            videoId,
+                            playlistId,
+                            cpn,
+                            signatureTimestamp = sigTimestamp,
+                        ).body<PlayerResponse>()
+
+                        if (vrRes.playabilityStatus.status == "OK" &&
+                            vrRes.streamingData?.adaptiveFormats?.any { !it.url.isNullOrEmpty() } == true) {
+                            vrRes
+                        } else null
+                    }.getOrNull()
+                }
+
+                val resultChannel = Channel<PlayerResponse?>(2)
+                launch { resultChannel.send(webRemixDeferred.await()) }
+                launch { resultChannel.send(androidVrDeferred.await()) }
+
+                val first = resultChannel.receive()
+                if (first != null) {
+                    decodedSigResponse = first
+                    webRemixDeferred.cancel()
+                    androidVrDeferred.cancel()
+                    Logger.d(TAG, "YouTube Player parallel race won by: ${if (first.streamingData?.adaptiveFormats?.any { !it.url.isNullOrEmpty() } == true && first.streamingData?.adaptiveFormats?.any { it.signatureCipher.isNullOrEmpty() } == true) "ANDROID_VR" else "WEB_REMIX"}")
+                } else {
+                    val second = resultChannel.receive()
+                    if (second != null) {
+                        decodedSigResponse = second
+                        Logger.d(TAG, "YouTube Player parallel race resolved on second attempt")
+                    }
+                }
             }
 
             // Multi-client fallback: mirrors XiaoRi's STREAM_FALLBACK_CLIENTS chain
             // Handles privately owned tracks, age-restricted content, and bot-detected sessions
             if (decodedSigResponse == null) {
-                val isPrivatelyOwned = tempRes.videoDetails?.musicVideoType == "MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK"
+                Logger.d(TAG, "YouTube Player parallel race failed — trying sequential fallback clients")
                 val fallbackClients = listOf(
                     YouTubeClient.ANDROID_MUSIC,
                     YouTubeClient.IOS,
@@ -1381,11 +1389,7 @@ class YouTube {
                             videoId,
                             playlistId,
                             cpn,
-                            signatureTimestamp = run {
-                                val today = Clock.System.todayIn(TimeZone.UTC)
-                                val epoch = Instant.fromEpochSeconds(0).toLocalDateTime(TimeZone.UTC).date
-                                epoch.daysUntil(today)
-                            },
+                            signatureTimestamp = sigTimestamp,
                         ).body<PlayerResponse>()
 
                         if (fallbackRes.playabilityStatus.status != "OK") {
@@ -1393,13 +1397,13 @@ class YouTube {
                             continue
                         }
 
-                        // For privately owned tracks skip URL validation
+                        val isPrivatelyOwned = fallbackRes.videoDetails?.musicVideoType == "MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK"
                         val hasDirectUrls = fallbackRes.streamingData?.adaptiveFormats
                             ?.any { !it.url.isNullOrEmpty() } == true
 
                         if (hasDirectUrls || isPrivatelyOwned) {
-                            decodedSigResponse = if (isPrivatelyOwned) {
-                                // Skip NewPipe for privately owned — use direct URLs as-is
+                            decodedSigResponse = if (isPrivatelyOwned || hasDirectUrls) {
+                                // Skip NewPipe for direct URLs and privately owned
                                 fallbackRes
                             } else {
                                 newPipePlayer(videoId, fallbackRes) ?: fallbackRes
