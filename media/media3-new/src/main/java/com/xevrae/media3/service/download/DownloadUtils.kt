@@ -82,11 +82,8 @@ internal class DownloadUtils(
                         if (videoUrl != null && it.expiredTime > now()) {
                             Logger.d("Stream", videoUrl)
                             Logger.w("Stream", "Video from format")
-                            val is403Url = streamRepository.is403Url(videoUrl).firstOrNull() != false
-                            if (!is403Url) {
-                                dataSpecReturn = dataSpec.withUri(videoUrl.toUri())
-                                return@runBlocking
-                            }
+                            dataSpecReturn = dataSpec.withUri(videoUrl.toUri())
+                            return@runBlocking
                         }
                     }
                     streamRepository
@@ -105,11 +102,8 @@ internal class DownloadUtils(
                         if (audioUrl != null && it.expiredTime > now()) {
                             Logger.d("Stream", audioUrl)
                             Logger.w("Stream", "Audio from format")
-                            val is403Url = streamRepository.is403Url(audioUrl).firstOrNull() != false
-                            if (!is403Url) {
-                                dataSpecReturn = dataSpec.withUri(audioUrl.toUri())
-                                return@runBlocking
-                            }
+                            dataSpecReturn = dataSpec.withUri(audioUrl.toUri())
+                            return@runBlocking
                         }
                     }
                     streamRepository
